@@ -100,7 +100,7 @@ var (
 	echoPackage    = []string{"github.com/labstack/echo/v4", "github.com/labstack/echo/v4/middleware"}
 
 	mysqlDriver    = []string{"github.com/go-sql-driver/mysql"}
-	postgresDriver = []string{"github.com/lib/pq"}
+	postgresDriver = []string{"github.com/jackc/pgx/v5/stdlib"}
 	sqliteDriver   = []string{"github.com/mattn/go-sqlite3"}
 	redisDriver    = []string{"github.com/redis/go-redis/v9"}
 	mongoDriver    = []string{"go.mongodb.org/mongo-driver"}
@@ -346,7 +346,6 @@ func (p *Project) CreateMainFile() error {
 
 	// Install the godotenv package
 	err = utils.GoGetPackage(projectPath, godotenvPackage)
-
 	if err != nil {
 		log.Println("Could not install go dependency")
 
@@ -420,18 +419,6 @@ func (p *Project) CreateMainFile() error {
 	if p.AdvancedOptions[string(flags.Tailwind)] {
 		// select htmx option automatically since tailwind is selected
 		p.AdvancedOptions[string(flags.Htmx)] = true
-
-		tailwindConfigFile, err := os.Create(fmt.Sprintf("%s/tailwind.config.js", projectPath))
-		if err != nil {
-			return err
-		}
-		defer tailwindConfigFile.Close()
-
-		tailwindConfigTemplate := advanced.TailwindConfigTemplate()
-		err = os.WriteFile(fmt.Sprintf("%s/tailwind.config.js", projectPath), tailwindConfigTemplate, 0o644)
-		if err != nil {
-			return err
-		}
 
 		err = os.MkdirAll(fmt.Sprintf("%s/%s/assets/css", projectPath, cmdWebPath), 0o755)
 		if err != nil {
@@ -891,25 +878,16 @@ func (p *Project) CreateViteReactProject(projectPath string) error {
 		cmd := exec.Command("npm", "install",
 			"--prefer-offline",
 			"--no-fund",
-			"tailwindcss", "postcss", "autoprefixer")
+			"tailwindcss@^4", "@tailwindcss/vite")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to install Tailwind: %w", err)
 		}
 
-		fmt.Println("Initializing Tailwind...")
-		cmd = exec.Command("npx", "--prefer-offline", "tailwindcss", "init", "-p")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to initialize Tailwind: %w", err)
-		}
-
-		// use the tailwind config file
-		err = os.WriteFile("tailwind.config.js", advanced.ReactTailwindConfigTemplate(), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write tailwind config: %w", err)
+		// Create the vite + react + Tailwind v4 configuration
+		if err := os.WriteFile(filepath.Join(frontendPath, "vite.config.ts"), advanced.ViteTailwindConfigFile(), 0644); err != nil {
+			return fmt.Errorf("failed to write vite.config.ts: %w", err)
 		}
 
 		srcDir := filepath.Join(frontendPath, "src")
@@ -939,6 +917,7 @@ func (p *Project) CreateViteReactProject(projectPath string) error {
 
 	return nil
 }
+
 func (p *Project) CreateHtmxTemplates() {
 	routesPlaceHolder := ""
 	importsPlaceHolder := ""
